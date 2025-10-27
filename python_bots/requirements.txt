@@ -1,0 +1,5 @@
+aiohttp==3.10.11
+asyncpg==0.30.0
+structlog==24.5.0
+psutil==6.1.0
+python-dotenv==1.0.1

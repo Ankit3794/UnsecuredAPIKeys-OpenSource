@@ -1,0 +1,97 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15
+    environment:
+      POSTGRES_DB: UnsecuredAPIKeys
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: your_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - unsecuredapikeys
+
+  # Redis for caching and rate limiting
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    networks:
+      - unsecuredapikeys
+
+  # Python FastAPI Backend
+  python-backend:
+    build:
+      context: ./python_backend
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://postgres:your_password@postgres:5432/UnsecuredAPIKeys
+      - REDIS_URL=redis://redis:6379
+      - ENVIRONMENT=production
+    depends_on:
+      - postgres
+      - redis
+    networks:
+      - unsecuredapikeys
+    volumes:
+      - ./python_backend:/app
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000
+
+  # Python Scraper Bot
+  python-scraper:
+    build:
+      context: ./python_bots
+      dockerfile: Dockerfile.scraper
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://postgres:your_password@postgres:5432/UnsecuredAPIKeys
+    depends_on:
+      - postgres
+      - python-backend
+    networks:
+      - unsecuredapikeys
+    volumes:
+      - ./python_bots:/app
+    command: python run_scraper.py
+
+  # Python Verifier Bot
+  python-verifier:
+    build:
+      context: ./python_bots
+      dockerfile: Dockerfile.verifier
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://postgres:your_password@postgres:5432/UnsecuredAPIKeys
+    depends_on:
+      - postgres
+      - python-backend
+    networks:
+      - unsecuredapikeys
+    volumes:
+      - ./python_bots:/app
+    command: python run_verifier.py
+
+  # Next.js Frontend (unchanged)
+  frontend:
+    build:
+      context: ./UnsecuredAPIKeys.UI
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=http://python-backend:8000
+    depends_on:
+      - python-backend
+    networks:
+      - unsecuredapikeys
+
+volumes:
+  postgres_data:
+
+networks:
+  unsecuredapikeys:
+    driver: bridge
